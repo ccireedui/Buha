@@ -1,23 +1,21 @@
 import { ethers, upgrades } from "hardhat";
 import fs from "fs";
 import path from "path";
+import { BuhaToken, BuhaGuardian } from "../genAddresses.json";
 
 async function main() {
-  const BuhaToken = await ethers.getContractFactory("BuhaToken");
-  const BuhaGuardian = await ethers.getContractFactory("BuhaGuardian");
+  const NewBuhaToken = await ethers.getContractFactory("BuhaTokenV2");
+  const NewBuhaGuardian = await ethers.getContractFactory("BuhaGuardianV2");
 
-  const buhaInstance = await upgrades.deployProxy(BuhaToken);
-  const guardianInstance = await upgrades.deployProxy(BuhaGuardian);
+  const upgradedBuha = await upgrades.upgradeProxy(BuhaToken, NewBuhaToken);
+  const upgradedGuardian = await upgrades.upgradeProxy(BuhaGuardian, NewBuhaGuardian);
 
-  await buhaInstance.deployed();
-  await guardianInstance.deployed();
-  
-  console.log("BuhaToken deployed to:", buhaInstance.address);
-  console.log("BuhaGuardian deployed to:", guardianInstance.address);
+  console.log("BuhaToken upgraded to:", upgradedBuha.address);
+  console.log("BuhaGuardian upgraded to:", upgradedGuardian.address);
 
   const content = {
-    BuhaToken: buhaInstance.address,
-    BuhaGuardian: guardianInstance.address,
+    BuhaToken: upgradedBuha.address,
+    BuhaGuardian: upgradedGuardian.address,
   };
   createAddressJson(
     path.join(__dirname, "./genAddresses.json"),
