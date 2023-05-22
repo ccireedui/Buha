@@ -1,0 +1,6 @@
+{
+  "name": "hardhat-project",
+  "devDependencies": {
+    "@openzeppelin/contracts-upgradeable": "^4.8.3"
+  }
+}
