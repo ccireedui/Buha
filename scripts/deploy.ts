@@ -4,14 +4,19 @@ import path from "path";
 
 async function main() {
   const BuhaToken = await ethers.getContractFactory("BuhaToken");
+  const BuhaGuardian = await ethers.getContractFactory("BuhaGuardian");
 
-  const instance = await upgrades.deployProxy(BuhaToken);
+  const buhaInstance = await upgrades.deployProxy(BuhaToken);
+  const guardianInstance = await upgrades.deployProxy(BuhaGuardian);
 
-  await instance.deployed();
-  console.log("BuhaToken deployed to:", instance.address);
+  await buhaInstance.deployed();
+  await guardianInstance.deployed();
+  console.log("BuhaToken deployed to:", buhaInstance.address);
+  console.log("BuhaGuardian deployed to:", guardianInstance.address);
 
   const content = {
-    BuhaToken: instance.address,
+    BuhaToken: buhaInstance.address,
+    BuhaGuardian: guardianInstance.address,
   };
   createAddressJson(
     path.join(__dirname, "/../genAddresses.json"),
