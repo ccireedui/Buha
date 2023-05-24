@@ -21,7 +21,6 @@ contract BuhaToken is
     using ABDKMath64x64 for uint;
 
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
 
     struct MintInfo {
         address user;
@@ -83,7 +82,6 @@ contract BuhaToken is
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
-        _grantRole(BURNER_ROLE, msg.sender);
     }
 
     function mint(uint term) public {
@@ -108,7 +106,7 @@ contract BuhaToken is
         });
         userMints[msg.sender] = mintInfo;
         activeMinters++;
-        emit Minted(msg.sender, term, userCount++);
+        emit MintStarted(msg.sender, term, userCount++);
     }
 
     function _calculateMaxTerm() private view returns (uint) {
@@ -127,7 +125,7 @@ contract BuhaToken is
     function _calculateMintReward(
         uint cRank,
         uint term,
-        uint32 maturityTs,
+        uint maturityTs,
         uint amplifier,
         uint eeaRate
     ) private view returns (uint) {
@@ -180,7 +178,8 @@ contract BuhaToken is
         return MathUpgradeable.min(penalty, MAX_PENALTY_PCT);
     }
 
-    function burnFrom(address from, uint amount) public onlyRole(BURNER_ROLE) {
+    function burnFrom(address from, uint amount) external {
+        _spendAllowance(from, msg.sender, amount);
         _burn(from, amount);
     }
 
