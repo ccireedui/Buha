@@ -58,16 +58,23 @@ contract BuhaToken is
     uint public constant WITHDRAWAL_WINDOW_DAYS = 7;
     uint public constant MAX_PENALTY_PCT = 99;
 
+    uint public constant BUHA_MIN_STAKE = 0;
+
+    uint public constant BUHA_MIN_BURN = 0;
+
+    uint public constant BUHA_APY_START = 20;
+    uint public constant BUHA_APY_DAYS_STEP = 90;
+    uint public constant BUHA_APY_END = 2;
     uint public userCount;
 
     mapping(address => MintInfo) public userMints;
-
     mapping(address => StakeInfo) public userStakes;
+    mapping(address => uint) public userBurns;
 
     uint public immutable genesisTs;
     uint public activeMinters;
     uint public activeStakes;
-    uint public totalXenStaked;
+    uint public totalBuhaStaked;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -109,6 +116,52 @@ contract BuhaToken is
         emit MintStarted(msg.sender, term, userCount++);
     }
 
+    function claim() public {
+        MintInfo memory mintInfo = userMints[msg.sender];
+        require(mintInfo.rank > 0, "CRank: No mint exists");
+        require(
+            block.timestamp > mintInfo.maturityTs,
+            "CRank: Mint maturity not reached"
+        );
+
+        // calculate reward and mint tokens
+        uint rewardAmount = _calculateMintReward(mintInfo) * 1 ether;
+        _mint(msg.sender, rewardAmount);
+
+        _cleanUpUserMint();
+        emit Claimed(msg.sender, rewardAmount);
+    }
+
+    function stake(uint amount, uint term) external {
+        require(balanceOf(msg.sender) >= amount, "BUHA: Not enough balance");
+        require(amount > BUHA_MIN_STAKE, "BUHA: Below min stake");
+        require(term * SECONDS_IN_DAY > MIN_TERM, "BUHA: Below min stake term");
+        require(
+            term * SECONDS_IN_DAY < MAX_TERM_END + 1,
+            "BUHA: Above max stake term"
+        );
+        require(userStakes[msg.sender].amount == 0, "BUHA: Stake exists");
+
+        _burn(msg.sender, amount);
+        _createStake(amount, term);
+        emit Staked(msg.sender, amount, term);
+    }
+
+    function withdraw() external {
+        StakeInfo memory userStake = userStakes[msg.sender];
+        require(userStake.amount > 0, "BUHA: No stake exists");
+
+        uint256 buhaReward = _calculateStakeReward(userStake);
+        activeStakes--;
+        totalBuhaStaked -= userStake.amount;
+
+        // mint staked BUHA (+ reward)
+        _mint(msg.sender, userStake.amount + buhaReward);
+
+        emit Withdrawn(msg.sender, userStake.amount, buhaReward);
+        delete userStakes[msg.sender];
+    }
+
     function _calculateMaxTerm() private view returns (uint) {
         if (userCount > TERM_AMPLIFIER_THRESHOLD) {
             uint delta = userCount
@@ -123,18 +176,30 @@ contract BuhaToken is
     }
 
     function _calculateMintReward(
-        uint cRank,
-        uint term,
-        uint maturityTs,
-        uint amplifier,
-        uint eeaRate
+        MintInfo memory mintInfo
     ) private view returns (uint) {
-        uint secsLate = block.timestamp - maturityTs;
+        uint secsLate = block.timestamp - mintInfo.maturityTs;
         uint penalty = _penalty(secsLate);
-        uint rankDelta = MathUpgradeable.max(userCount - cRank, 2);
-        uint EAA = (1_000 + eeaRate);
-        uint reward = getGrossReward(rankDelta, amplifier, term, EAA);
+        uint rankDelta = MathUpgradeable.max(userCount - mintInfo.rank, 2);
+        uint EAA = (1_000 + mintInfo.eaaRate);
+        uint reward = getGrossReward(
+            rankDelta,
+            mintInfo.amplifier,
+            mintInfo.term,
+            EAA
+        );
         return (reward * (100 - penalty)) / 100;
+    }
+
+    function _calculateStakeReward(
+        StakeInfo memory stakeInfo
+    ) private view returns (uint256) {
+        if (block.timestamp > stakeInfo.maturityTs) {
+            uint256 rate = (stakeInfo.apy * stakeInfo.term * 1_000_000) /
+                DAYS_IN_YEAR;
+            return (stakeInfo.amount * rate) / 100_000_000;
+        }
+        return 0;
     }
 
     function _calculateRewardAmplifier() private view returns (uint) {
@@ -154,6 +219,13 @@ contract BuhaToken is
         uint decrease = (EAA_PM_STEP * userCount) / EAA_RANK_STEP;
         if (decrease > EAA_PM_START) return 0;
         return EAA_PM_START - decrease;
+    }
+
+    function _calculateAPY() private view returns (uint256) {
+        uint256 decrease = (block.timestamp - genesisTs) /
+            (SECONDS_IN_DAY * BUHA_APY_DAYS_STEP);
+        if (BUHA_APY_START - BUHA_APY_END < decrease) return BUHA_APY_END;
+        return BUHA_APY_START - decrease;
     }
 
     function getGrossReward(
@@ -179,13 +251,26 @@ contract BuhaToken is
     }
 
     function burnFrom(address from, uint amount) external {
+        require(amount > BUHA_MIN_BURN, "Burn: Below min limit");
         _spendAllowance(from, msg.sender, amount);
         _burn(from, amount);
+        userBurns[from] += amount;
     }
 
     function _cleanUpUserMint() internal {
         delete userMints[msg.sender];
         activeMinters--;
+    }
+
+    function _createStake(uint amount, uint term) private {
+        userStakes[msg.sender] = StakeInfo({
+            term: term,
+            maturityTs: block.timestamp + term * SECONDS_IN_DAY,
+            amount: amount,
+            apy: _calculateAPY()
+        });
+        activeStakes++;
+        totalBuhaStaked += amount;
     }
 
     function _authorizeUpgrade(
