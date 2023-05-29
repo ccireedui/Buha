@@ -200,6 +200,39 @@ contract BuhaToken is
         delete userStakes[msg.sender];
     }
 
+    function claimAndStake(uint percentage, uint term) external {
+        MintInfo memory mintInfo = userMints[msg.sender];
+        require(mintInfo.rank > 0, "BUHA: No mint exists");
+        require(
+            block.timestamp > mintInfo.maturityTs,
+            "BUHA: Mint maturity not reached"
+        );
+        require(
+            percentage > 0 && percentage <= 100,
+            "BUHA: Percentage must be between 1 and 100"
+        );
+        require(term * SECONDS_IN_DAY > MIN_TERM, "BUHA: Below min stake term");
+        require(
+            term * SECONDS_IN_DAY < MAX_TERM_END + 1,
+            "BUHA: Above max stake term"
+        );
+        require(userStakes[msg.sender].amount == 0, "BUHA: Stake exists");
+
+        // calculate reward and mint tokens
+        uint rewardAmount = _calculateMintReward(mintInfo) * 1 ether;
+        uint stakeAmount = (rewardAmount * percentage) / 100;
+        uint claimingAmount = rewardAmount - stakeAmount;
+
+        require(stakeAmount > BUHA_MIN_STAKE, "BUHA: Below min stake");
+
+        _mint(msg.sender, claimingAmount);
+        _createStake(stakeAmount, term);
+
+        _cleanUpUserMint();
+        emit Claimed(msg.sender, rewardAmount);
+        emit Staked(msg.sender, stakeAmount, term);
+    }
+
     function burn(uint amount) external {
         require(amount > BUHA_MIN_BURN, "BUHA: Below min burn limit");
         _burn(msg.sender, amount);
