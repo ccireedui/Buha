@@ -288,6 +288,18 @@ contract BuhaToken is
         return _calculateRewardAmplifier();
     }
 
+    function getCurrentEAAR() external view returns (uint256) {
+        return _calculateEAARate();
+    }
+
+    function getCurrentAPY() external view returns (uint256) {
+        return _calculateAPY();
+    }
+
+    function getCurrentMaxTerm() external view returns (uint) {
+        return _calculateMaxTerm();
+    }
+
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyRole(UPGRADER_ROLE) {}
