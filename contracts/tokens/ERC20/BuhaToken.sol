@@ -43,8 +43,6 @@ contract BuhaToken is
     uint public constant SECONDS_IN_DAY = 3_600 * 24;
     uint public constant DAYS_IN_YEAR = 365;
 
-    uint public constant GENESIS_RANK = 1;
-
     uint public constant MIN_TERM = 1 * SECONDS_IN_DAY - 1;
     uint public constant MAX_TERM_START = 100 * SECONDS_IN_DAY;
     uint public constant MAX_TERM_END = 1_000 * SECONDS_IN_DAY;
@@ -65,13 +63,13 @@ contract BuhaToken is
     uint public constant BUHA_APY_START = 20;
     uint public constant BUHA_APY_DAYS_STEP = 90;
     uint public constant BUHA_APY_END = 2;
-    uint public userCount;
 
     mapping(address => MintInfo) public userMints;
     mapping(address => StakeInfo) public userStakes;
     mapping(address => uint) public userBurns;
 
     uint public immutable genesisTs;
+    uint public userCount;
     uint public activeMinters;
     uint public activeStakes;
     uint public totalBuhaStaked;
@@ -83,7 +81,7 @@ contract BuhaToken is
     }
 
     function initialize() public initializer {
-        __ERC20_init("BuhaToken", "BUHA");
+        __ERC20_init("Buha Token", "BUHA");
         __AccessControl_init();
         __UUPSUpgradeable_init();
 
@@ -91,16 +89,16 @@ contract BuhaToken is
         _grantRole(UPGRADER_ROLE, msg.sender);
     }
 
-    function mint(uint term) public {
+    function startMinting(uint term) external {
         uint termSec = term * SECONDS_IN_DAY;
-        require(termSec > MIN_TERM, "CRank: Term less than min");
+        require(termSec > MIN_TERM, "BUHA: Term less than min");
         require(
             termSec < _calculateMaxTerm() + 1,
-            "CRank: Term more than current max term"
+            "BUHA: Term more than current max term"
         );
         require(
             userMints[msg.sender].rank == 0,
-            "CRank: Mint already in progress"
+            "BUHA: Mint already in progress"
         );
 
         MintInfo memory mintInfo = MintInfo({
@@ -116,7 +114,7 @@ contract BuhaToken is
         emit MintStarted(msg.sender, term, userCount++);
     }
 
-    function claim() public {
+    function claim() external {
         MintInfo memory mintInfo = userMints[msg.sender];
         require(mintInfo.rank > 0, "CRank: No mint exists");
         require(
@@ -160,6 +158,27 @@ contract BuhaToken is
 
         emit Withdrawn(msg.sender, userStake.amount, buhaReward);
         delete userStakes[msg.sender];
+    }
+
+    function burnFrom(address from, uint amount) external {
+        require(amount > BUHA_MIN_BURN, "Burn: Below min limit");
+        _spendAllowance(from, msg.sender, amount);
+        _burn(from, amount);
+        userBurns[from] += amount;
+    }
+
+    function getGrossReward(
+        uint rankDelta,
+        uint amplifier,
+        uint term,
+        uint eaa
+    ) public pure returns (uint) {
+        int128 log128 = rankDelta.fromUInt().log_2();
+        int128 reward128 = log128
+            .mul(amplifier.fromUInt())
+            .mul(term.fromUInt())
+            .mul(eaa.fromUInt());
+        return reward128.div(uint(1_000).fromUInt()).toUInt();
     }
 
     function _calculateMaxTerm() private view returns (uint) {
@@ -228,33 +247,12 @@ contract BuhaToken is
         return BUHA_APY_START - decrease;
     }
 
-    function getGrossReward(
-        uint rankDelta,
-        uint amplifier,
-        uint term,
-        uint eaa
-    ) public pure returns (uint) {
-        int128 log128 = rankDelta.fromUInt().log_2();
-        int128 reward128 = log128
-            .mul(amplifier.fromUInt())
-            .mul(term.fromUInt())
-            .mul(eaa.fromUInt());
-        return reward128.div(uint(1_000).fromUInt()).toUInt();
-    }
-
     function _penalty(uint secsLate) private pure returns (uint) {
         // =MIN(2^(daysLate+3)/window-1,99)
         uint daysLate = secsLate / SECONDS_IN_DAY;
         if (daysLate > WITHDRAWAL_WINDOW_DAYS - 1) return MAX_PENALTY_PCT;
         uint penalty = (uint(1) << (daysLate + 3)) / WITHDRAWAL_WINDOW_DAYS - 1;
         return MathUpgradeable.min(penalty, MAX_PENALTY_PCT);
-    }
-
-    function burnFrom(address from, uint amount) external {
-        require(amount > BUHA_MIN_BURN, "Burn: Below min limit");
-        _spendAllowance(from, msg.sender, amount);
-        _burn(from, amount);
-        userBurns[from] += amount;
     }
 
     function _cleanUpUserMint() internal {
@@ -271,6 +269,23 @@ contract BuhaToken is
         });
         activeStakes++;
         totalBuhaStaked += amount;
+    }
+
+    // Getter functions
+    function getUserMint() external view returns (MintInfo memory) {
+        return userMints[msg.sender];
+    }
+
+    function getUserStake() external view returns (StakeInfo memory) {
+        return userStakes[msg.sender];
+    }
+
+    function getUserBurn() external view returns (uint) {
+        return userBurns[msg.sender];
+    }
+
+    function getCurrentAMP() external view returns (uint) {
+        return _calculateRewardAmplifier();
     }
 
     function _authorizeUpgrade(
