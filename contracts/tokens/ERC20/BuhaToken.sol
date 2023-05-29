@@ -116,10 +116,10 @@ contract BuhaToken is
 
     function claim() external {
         MintInfo memory mintInfo = userMints[msg.sender];
-        require(mintInfo.rank > 0, "CRank: No mint exists");
+        require(mintInfo.rank > 0, "BUHA: No mint exists");
         require(
             block.timestamp > mintInfo.maturityTs,
-            "CRank: Mint maturity not reached"
+            "BUHA: Mint maturity not reached"
         );
 
         // calculate reward and mint tokens
@@ -160,8 +160,36 @@ contract BuhaToken is
         delete userStakes[msg.sender];
     }
 
+    function withdrawEarly() external {
+        StakeInfo memory userStake = userStakes[msg.sender];
+        require(userStake.amount > 0, "BUHA: No stake exists");
+        require(
+            block.timestamp < userStake.maturityTs,
+            "BUHA: Stake maturity reached"
+        );
+
+        uint256 buhaReward = _calculateStakeReward(userStake);
+        uint256 penalty = _earlyPenalty(userStake.maturityTs - block.timestamp);
+        uint256 totalReward = (buhaReward * (100 - penalty)) / 100;
+
+        activeStakes--;
+        totalBuhaStaked -= userStake.amount;
+
+        // mint staked BUHA (+ reward)
+        _mint(msg.sender, userStake.amount + totalReward);
+
+        emit Withdrawn(msg.sender, userStake.amount, totalReward);
+        delete userStakes[msg.sender];
+    }
+
+    function burn(uint amount) external {
+        require(amount > BUHA_MIN_BURN, "BUHA: Below min burn limit");
+        _burn(msg.sender, amount);
+        userBurns[msg.sender] += amount;
+    }
+
     function burnFrom(address from, uint amount) external {
-        require(amount > BUHA_MIN_BURN, "Burn: Below min limit");
+        require(amount > BUHA_MIN_BURN, "BUHA: Below min burn limit");
         _spendAllowance(from, msg.sender, amount);
         _burn(from, amount);
         userBurns[from] += amount;
@@ -198,7 +226,7 @@ contract BuhaToken is
         MintInfo memory mintInfo
     ) private view returns (uint) {
         uint secsLate = block.timestamp - mintInfo.maturityTs;
-        uint penalty = _penalty(secsLate);
+        uint penalty = _latePenalty(secsLate);
         uint rankDelta = MathUpgradeable.max(userCount - mintInfo.rank, 2);
         uint EAA = (1_000 + mintInfo.eaaRate);
         uint reward = getGrossReward(
@@ -247,7 +275,15 @@ contract BuhaToken is
         return BUHA_APY_START - decrease;
     }
 
-    function _penalty(uint secsLate) private pure returns (uint) {
+    function _earlyPenalty(uint secsEarly) private pure returns (uint) {
+        // =MIN(2^(daysLate+3)/window-1,99)
+        uint daysLate = secsEarly / SECONDS_IN_DAY;
+        if (daysLate > WITHDRAWAL_WINDOW_DAYS - 1) return MAX_PENALTY_PCT;
+        uint penalty = (uint(1) << (daysLate + 3)) / WITHDRAWAL_WINDOW_DAYS - 1;
+        return MathUpgradeable.min(penalty, MAX_PENALTY_PCT);
+    }
+
+    function _latePenalty(uint secsLate) private pure returns (uint) {
         // =MIN(2^(daysLate+3)/window-1,99)
         uint daysLate = secsLate / SECONDS_IN_DAY;
         if (daysLate > WITHDRAWAL_WINDOW_DAYS - 1) return MAX_PENALTY_PCT;
