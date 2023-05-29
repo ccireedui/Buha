@@ -130,6 +130,24 @@ contract BuhaToken is
         emit Claimed(msg.sender, rewardAmount);
     }
 
+    function claimEarly() external {
+        MintInfo memory mintInfo = userMints[msg.sender];
+        require(mintInfo.rank > 0, "BUHA: No mint exists");
+        require(
+            block.timestamp < mintInfo.maturityTs,
+            "BUHA: Mint maturity reached"
+        );
+
+        // calculate reward and mint tokens
+        uint rewardAmount = _calculateMintReward(mintInfo) * 1 ether;
+        uint penalty = _earlyPenalty(mintInfo.maturityTs - block.timestamp);
+        uint totalReward = (rewardAmount * (100 - penalty)) / 100;
+        _mint(msg.sender, totalReward);
+
+        _cleanUpUserMint();
+        emit Claimed(msg.sender, totalReward);
+    }
+
     function stake(uint amount, uint term) external {
         require(balanceOf(msg.sender) >= amount, "BUHA: Not enough balance");
         require(amount > BUHA_MIN_STAKE, "BUHA: Below min stake");
