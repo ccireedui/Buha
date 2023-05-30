@@ -68,7 +68,7 @@ contract BuhaToken is
     mapping(address => StakeInfo) public userStakes;
     mapping(address => uint) public userBurns;
 
-    uint public immutable genesisTs;
+    uint public genesisTs;
     uint public userCount;
     uint public activeMinters;
     uint public activeStakes;
