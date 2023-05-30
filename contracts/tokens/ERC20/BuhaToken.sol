@@ -150,7 +150,7 @@ contract BuhaToken is
     }
 
     function stake(uint amount, uint term) external {
-        require(balanceOf(msg.sender) >= amount, "BUHA: Not enough balance");
+        require(balanceOf(msg.sender) >= amount, "BUHA: Insufficient balance");
         require(amount > BUHA_MIN_STAKE, "BUHA: Below min stake");
         require(term * SECONDS_IN_DAY > MIN_TERM, "BUHA: Below min stake term");
         require(
