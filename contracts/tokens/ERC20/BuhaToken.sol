@@ -87,6 +87,7 @@ contract BuhaToken is
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
+        userCount = 1;
     }
 
     function startMinting(uint term) external {
@@ -139,7 +140,7 @@ contract BuhaToken is
         );
 
         // calculate reward and mint tokens
-        uint rewardAmount = _calculateMintReward(mintInfo) * 1 ether;
+        uint rewardAmount = _calculateEarlyMintReward(mintInfo) * 1 ether;
         uint penalty = _earlyPenalty(mintInfo.maturityTs - block.timestamp);
         uint totalReward = (rewardAmount * (100 - penalty)) / 100;
         _mint(msg.sender, totalReward);
@@ -289,6 +290,23 @@ contract BuhaToken is
         return (reward * (100 - penalty)) / 100;
     }
 
+    // TBD refactor formula
+    function _calculateEarlyMintReward(
+        MintInfo memory mintInfo
+    ) private view returns (uint) {
+        uint secsEarly = mintInfo.maturityTs - block.timestamp;
+        uint penalty = _earlyPenalty(secsEarly);
+        uint rankDelta = MathUpgradeable.max(userCount - mintInfo.rank, 2);
+        uint EAA = (1_000 + mintInfo.eaaRate);
+        uint reward = getGrossReward(
+            rankDelta,
+            mintInfo.amplifier,
+            mintInfo.term,
+            EAA
+        );
+        return (reward * (100 - penalty)) / 100;
+    }
+
     function _calculateStakeReward(
         StakeInfo memory stakeInfo
     ) private view returns (uint256) {
@@ -327,10 +345,12 @@ contract BuhaToken is
     }
 
     function _earlyPenalty(uint secsEarly) private pure returns (uint) {
-        // =MIN(2^(daysLate+3)/window-1,99)
-        uint daysLate = secsEarly / SECONDS_IN_DAY;
-        if (daysLate > WITHDRAWAL_WINDOW_DAYS - 1) return MAX_PENALTY_PCT;
-        uint penalty = (uint(1) << (daysLate + 3)) / WITHDRAWAL_WINDOW_DAYS - 1;
+        // =MIN(2^(daysEarly+3)/window-1,99)
+        uint daysEarly = secsEarly / SECONDS_IN_DAY;
+        if (daysEarly > WITHDRAWAL_WINDOW_DAYS - 1) return MAX_PENALTY_PCT;
+        uint penalty = (uint(1) << (daysEarly + 3)) /
+            WITHDRAWAL_WINDOW_DAYS -
+            1;
         return MathUpgradeable.min(penalty, MAX_PENALTY_PCT);
     }
 

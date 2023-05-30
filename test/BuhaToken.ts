@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers, upgrades } from "hardhat";
 import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 
 describe("BuhaToken", function () {
 
@@ -46,5 +47,22 @@ describe("BuhaToken", function () {
 
     it("Should return the right totalSupply", async function () {
         expect(await this.buhaInstance.totalSupply()).to.equal(0);
+    });
+
+    it("Should emit MintStarted event when minting", async function () {
+        const days = ethers.utils.parseUnits("100", 0);
+        await expect(this.buhaInstance.startMinting(days)).to.emit(this.buhaInstance, "MintStarted").withArgs(this.owner.address, days, anyValue);
+    });
+    
+    it("Should revert term exceeds max value", async function () {
+        const days = ethers.utils
+            .parseUnits("100000", 0)
+        await expect(this.buhaInstance.startMinting(days)).to.be.revertedWith("BUHA: Term more than current max term");
+    });
+
+    it("Should be able to claim the mint early", async function () {
+        const days = ethers.utils.parseUnits("100", 0);
+        await this.buhaInstance.startMinting(days);
+        await expect(this.buhaInstance.claimEarly()).to.emit(this.buhaInstance, "Claimed").withArgs(this.owner.address, anyValue);
     });
 });
