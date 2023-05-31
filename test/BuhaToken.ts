@@ -60,7 +60,9 @@ describe("BuhaToken", function () {
 
     it("Should emit MintStarted event when minting", async function () {
         const days = ethers.utils.parseUnits("100", 0);
+        const activeMintersCount = await this.buhaInstance.activeMinters();
         await expect(this.buhaInstance.connect(this.otherAccount).startMinting(days)).to.emit(this.buhaInstance, "MintStarted").withArgs(this.otherAccount.address, days, anyValue);
+        expect(await this.buhaInstance.activeMinters()).to.equal(activeMintersCount.add(1));
     });
     
     it("Should revert term exceeds max value", async function () {
