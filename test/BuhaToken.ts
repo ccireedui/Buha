@@ -72,10 +72,13 @@ describe("BuhaToken", function () {
     });
 
     it("Should emit Claimed event upon claiming reward", async function () {
+        const activeMintersCount = await this.buhaInstance.activeMinters();
         const mintInfo = await this.buhaInstance.userMints(this.mintingAccount.address);
         const maturityTs = ethers.utils.hexValue(mintInfo.maturityTs);
         await time.increaseTo(maturityTs);
         await expect(this.buhaInstance.connect(this.mintingAccount).claim()).to.emit(this.buhaInstance, "Claimed").withArgs(this.mintingAccount.address, anyValue);
+        expect(await this.buhaInstance.activeMinters()).to.equal(activeMintersCount.sub(1));
+        expect(await this.buhaInstance.userMints(this.mintingAccount.address)).to.not.equal(mintInfo);
     });
 
     it("Should revert if claiming before maturity", async function () {
@@ -83,7 +86,11 @@ describe("BuhaToken", function () {
     });
 
     it("Should be able to claim the mint early", async function () {
+        const activeMintersCount = await this.buhaInstance.activeMinters();
+        const mintInfo = await this.buhaInstance.userMints(this.mintingAccount.address);
         await expect(this.buhaInstance.connect(this.mintingAccount).claimEarly()).to.emit(this.buhaInstance, "Claimed").withArgs(this.mintingAccount.address, anyValue);
+        expect(await this.buhaInstance.activeMinters()).to.equal(activeMintersCount.sub(1));
+        expect(await this.buhaInstance.userMints(this.mintingAccount.address)).to.not.equal(mintInfo);
     });
 
     it("Should revert if earlyClaiming after maturity", async function () {
@@ -94,9 +101,15 @@ describe("BuhaToken", function () {
     });
 
     it("Should emit Staked event", async function () {
+        const preStakingBalance = await this.buhaInstance.balanceOf(this.stakingAccount.address);
+        const preStakingCount = await this.buhaInstance.activeStakes();
+        const preStakingAmount = await this.buhaInstance.totalBuhaStaked();
         const amount = ethers.utils.parseUnits("100", 18);
         const stakingTerm = ethers.utils.parseUnits("50", 0);
         await expect(this.buhaInstance.connect(this.stakingAccount).stake(amount, stakingTerm)).to.emit(this.buhaInstance, "Staked").withArgs(this.stakingAccount.address, amount, stakingTerm);
+        expect(await this.buhaInstance.balanceOf(this.stakingAccount.address)).to.equal(preStakingBalance.sub(amount));
+        expect(await this.buhaInstance.activeStakes()).to.equal(preStakingCount.add(1));
+        expect(await this.buhaInstance.totalBuhaStaked()).to.equal(preStakingAmount.add(amount));
     });
 
     it("Should revert if staking amount exceeds balance", async function () {
