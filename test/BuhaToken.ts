@@ -265,4 +265,39 @@ describe("BuhaToken", function () {
       .to.emit(this.buhaInstance, "Claimed")
       .to.emit(this.buhaInstance, "Staked");
   });
+
+  it("Should burn user's tokens if the amount is equal or below user's balance", async function () {
+    const amount = await this.buhaInstance.balanceOf(
+      this.stakingAccount.address
+    );
+    await this.buhaInstance.connect(this.stakingAccount).burn(amount);
+
+    const userBurns = await this.buhaInstance.userBurns(
+      this.stakingAccount.address
+    );
+    expect(userBurns).to.equal(amount);
+
+    const userBalance = await this.buhaInstance.balanceOf(
+      this.stakingAccount.address
+    );
+    expect(userBalance).to.equal(0);
+  });
+
+  it("Should revert if the amount is more than user's balance", async function () {
+    const amount = await this.buhaInstance.balanceOf(
+      this.stakingAccount.address
+    );
+    await expect(
+      this.buhaInstance.connect(this.stakingAccount).burn(amount.add(1))
+    ).to.be.revertedWith("ERC20: burn amount exceeds balance");
+    const userBurns = await this.buhaInstance.userBurns(
+      this.stakingAccount.address
+    );
+    expect(userBurns).to.equal(0);
+
+    const userBalance = await this.buhaInstance.balanceOf(
+      this.stakingAccount.address
+    );
+    expect(userBalance).to.equal(amount);
+  });
 });
