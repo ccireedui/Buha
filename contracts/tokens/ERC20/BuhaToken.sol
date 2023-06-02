@@ -168,7 +168,7 @@ contract BuhaToken is
         StakeInfo memory userStake = userStakes[msg.sender];
         require(userStake.amount > 0, "BUHA: No stake exists");
 
-        uint256 buhaReward = _calculateStakeReward(userStake);
+        uint buhaReward = _calculateStakeReward(userStake);
         activeStakes--;
         totalBuhaStaked -= userStake.amount;
 
@@ -187,9 +187,9 @@ contract BuhaToken is
             "BUHA: Stake maturity reached"
         );
 
-        uint256 buhaReward = _calculateStakeReward(userStake);
-        uint256 penalty = _earlyPenalty(userStake.maturityTs - block.timestamp);
-        uint256 totalReward = (buhaReward * (100 - penalty)) / 100;
+        uint buhaReward = _calculateStakeReward(userStake);
+        uint penalty = _earlyPenalty(userStake.maturityTs - block.timestamp);
+        uint totalReward = (buhaReward * (100 - penalty)) / 100;
 
         activeStakes--;
         totalBuhaStaked -= userStake.amount;
@@ -309,9 +309,9 @@ contract BuhaToken is
 
     function _calculateStakeReward(
         StakeInfo memory stakeInfo
-    ) private view returns (uint256) {
+    ) private view returns (uint) {
         if (block.timestamp > stakeInfo.maturityTs) {
-            uint256 rate = (stakeInfo.apy * stakeInfo.term * 1_000_000) /
+            uint rate = (stakeInfo.apy * stakeInfo.term * 1_000_000) /
                 DAYS_IN_YEAR;
             return (stakeInfo.amount * rate) / 100_000_000;
         }
@@ -337,8 +337,8 @@ contract BuhaToken is
         return EAA_PM_START - decrease;
     }
 
-    function _calculateAPY() private view returns (uint256) {
-        uint256 decrease = (block.timestamp - genesisTs) /
+    function _calculateAPY() private view returns (uint) {
+        uint decrease = (block.timestamp - genesisTs) /
             (SECONDS_IN_DAY * BUHA_APY_DAYS_STEP);
         if (BUHA_APY_START - BUHA_APY_END < decrease) return BUHA_APY_END;
         return BUHA_APY_START - decrease;
@@ -395,11 +395,11 @@ contract BuhaToken is
         return _calculateRewardAmplifier();
     }
 
-    function getCurrentEAAR() external view returns (uint256) {
+    function getCurrentEAAR() external view returns (uint) {
         return _calculateEAARate();
     }
 
-    function getCurrentAPY() external view returns (uint256) {
+    function getCurrentAPY() external view returns (uint) {
         return _calculateAPY();
     }
 
