@@ -77,7 +77,6 @@ contract BuhaToken is
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
-        genesisTs = block.timestamp;
     }
 
     function initialize() public initializer {
@@ -87,6 +86,7 @@ contract BuhaToken is
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(UPGRADER_ROLE, msg.sender);
+        genesisTs = block.timestamp;
         userCount = 1;
     }
 
